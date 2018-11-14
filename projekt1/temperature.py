@@ -16,89 +16,132 @@ def get_start_row(N, size, rank):
     else:
         return  N - (size - rank)*get_num_rows_to_calc(N, size, rank)
 
+def send_to_neighbors(rank, t, world_size):
+    if rank != world_size - 1:
+        send_to_next = t[-2, :]  # send last calculated by rank 0
+        comm.Send(send_to_next, dest=rank + 1, tag=13)
+
+    if rank != 0:
+        send_to_prev = t[1, :]
+        comm.Send(send_to_prev, dest=rank - 1, tag=13)
+
+def recieve_from_neighbors(rank, t, world_size, N):
+    if rank != world_size - 1:
+        recv_from_next = np.empty(N, dtype=np.float64)
+        comm.Recv(recv_from_next, source=rank + 1, tag=13)
+        t[-1, :] = recv_from_next
+
+    if rank != 0:
+        recv_from_prev = np.empty(N, dtype=np.float64)
+        comm.Recv(recv_from_prev, source=rank - 1, tag=13)
+        t[0, :] = recv_from_prev
+
 # constants
 g = 1
 l = 15
 h = 1
 
+
 N = 1000000
 max_iter = 3
 
-def calculate_temperature(tab, y, x, N):
-    if x == 0 or y == 0 or x == N-1 or y == N-1:
-        return 0.
+def calculate_temperature(tab, y, x):
     t_g = tab[y - 1, x]
     t_d = tab[y + 1, x]
     t_l = tab[y, x - 1]
     t_r = tab[y, x + 1]
     return (t_g + t_d + t_l + t_r + (g*h)/l)/4
 
-comm = MPI.COMM_WORLD
-size = comm.Get_size()
-rank = comm.Get_rank()
+def main():
+    comm = MPI.COMM_WORLD
+    world_size = comm.Get_size()
+    rank = comm.Get_rank()
+
+    if rank == 0:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("N")
+        parser.add_argument("max_iter")
+        args = parser.parse_args()
+        N = int(args.N)
+        max_iter = int(args.max_iter)
+
+        if world_size == 1:
+            T = np.zeros([N, N], dtype='d')
+            for it in range(max_iter):
+                for row in range(1, N - 1):
+                    for col in range(1, N - 1):
+                        T[row,col] =  calculate_temperature(T, row, col)
+            plt.imshow(T)
+            plt.show()
+            return
 
 
-if rank == 0:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("N")
-    parser.add_argument("max_iter")
-    args = parser.parse_args()
-    N = int(args.N)
-    max_iter = int(args.max_iter)
+    N = comm.bcast(N, root=0)
+    max_iter = comm.bcast(max_iter, root=0)
+    comm.Barrier()
+
+    if rank < N%world_size:
+        rows_to_calculate = N // world_size + 1
+        start_row = rank*rows_to_calculate
+    else:
+        rows_to_calculate = N // world_size
+        start_row = N - (world_size - rank) * rows_to_calculate
+
+    ## initialize table
+    if rank == 0:
+        t = np.random.rand(rows_to_calculate + 1, N)
+        t[0,:] = 0
+
+    elif rank == world_size - 1:
+        t = np.random.rand(rows_to_calculate + 1, N)
+        t[-1,:] = 0
+
+    else:
+        t = np.random.rand(rows_to_calculate + 2, N)
+
+    t[:,0] = 0
+    t[:,-1] = 0
 
 
-    T = np.random.rand(N, N)
-    T[0, :] = 0
-    T[:, 0] = 0
-    T[-1, :] = 0
-    T[:, -1] = 0
-    plt.imshow(T)
-    plt.title("before")
-    plt.colorbar()
-    plt.show()
+    send_to_neighbors(rank, t, world_size)
 
 
-N = comm.bcast(N, root=0)
-max_iter = comm.bcast(max_iter, root=0)
-comm.Barrier()
+    y_size, x_size = t.shape
 
-if rank < N%size:
-    rows_to_calculate = N//size + 1
-    start_row = rank*rows_to_calculate
-else:
-    rows_to_calculate = N//size
-    start_row = N - (size - rank)*rows_to_calculate
+    for i in range(max_iter):
+        recieve_from_neighbors(rank, t, world_size, N)
+        for y in range(1, y_size-1):
+            for x in range(1, x_size-1):
+                t[y, x] = calculate_temperature(t, y, x)
 
-if rank != 0:
-    T = np.empty(N * N, dtype='d')
-    T = np.reshape(T, (N, N))
+        send_to_neighbors(rank, t, world_size)
 
-split_sizes = [ get_num_rows_to_calc(N, size, x)*N for x in range(size)]
-displacements = [ get_start_row(N, size, x)*N for x in range(size)]
+    recieve_from_neighbors(rank, t, world_size, N)
+    comm.Barrier()
 
-for i in range(max_iter):
-    comm.Bcast(T, root=0) # broadcast the array from rank 0 to all others
-    #T[start_row:start_row + rows_to_calculate,:] = rank
-    for y in range(start_row, start_row + rows_to_calculate):
-        for x in range(N):
-            T[y, x] = calculate_temperature(T, y, x, N)
-
-    output_table = T[start_row:start_row + rows_to_calculate,:]
-
+    ## gather results
+    split_sizes = [ get_num_rows_to_calc(N, world_size, x)*N for x in range(world_size)]
+    displacements = [ get_start_row(N, world_size, x)*N for x in range(world_size)]
+    displacements[0] = N
 
     recvbuf = None
     if rank == 0:
-        recvbuf = np.zeros([N,N], dtype='d')
+        recvbuf = np.zeros([N, N], dtype='d')
+        output_table = t
+    if rank == world_size -1:
+        output_table = t[1:,:]
+    else:
+        output_table = t[1:-1,:]
 
-    comm.Barrier()
     comm.Gatherv(output_table, [recvbuf, split_sizes, displacements, MPI.DOUBLE], root=0)
 
     if rank == 0:
-        T = recvbuf
+        plt.imshow(recvbuf)
+        plt.show()
+        print(recvbuf.shape)
+        print(split_sizes)
+        print(displacements)
 
-if rank == 0:
-    print(T)
-    plt.imshow(T)
-    plt.title("after")
-    plt.colorbar()
-    plt.show()
+main()
+
+
