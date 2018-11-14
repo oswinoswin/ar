@@ -11,10 +11,11 @@ with open(filename, 'wb') as f_out:
     f_out.write("points,procesors,time\n")
     for n in N:
         for proc in procs:
-
-            run_cmd = ''' mpiexec -machinefile a8 -np {} ./temperature.py {}'''.format(proc, n).strip()
-            print(run_cmd)
-            time = commands.getoutput(run_cmd).split(' ')[0]
-            print(time)
-            f_out.write("{},{},{}\n".format(str(n), str(proc), str(time)))
+            time_total = 0
+            for i in range(10):
+                run_cmd = ''' mpiexec -np {} ./temperature.py {}'''.format(proc, n).strip()
+                print(run_cmd)
+                time = commands.getoutput(run_cmd).split(' ')[0]
+                time_total += float(time)
+            f_out.write("{},{},{}\n".format(str(n), str(proc), str(time_total/10)))
 print("done")
