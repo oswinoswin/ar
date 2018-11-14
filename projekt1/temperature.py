@@ -43,7 +43,7 @@ h = 1
 
 
 N = 1000000
-max_iter = 3
+max_iter = 10
 
 def calculate_temperature(tab, y, x):
     t_g = tab[y - 1, x]
@@ -60,10 +60,10 @@ rank = comm.Get_rank()
 if rank == 0:
     parser = argparse.ArgumentParser()
     parser.add_argument("N")
-    parser.add_argument("max_iter")
+    # parser.add_argument("max_iter")
     args = parser.parse_args()
     N = int(args.N)
-    max_iter = int(args.max_iter)
+    # max_iter = int(args.max_iter)
 
     start_time = MPI.Wtime()
 
@@ -79,7 +79,7 @@ if rank == 0:
 
 
 N = comm.bcast(N, root=0)
-max_iter = comm.bcast(max_iter, root=0)
+# max_iter = comm.bcast(max_iter, root=0)
 comm.Barrier()
 
 if rank < N%world_size:
