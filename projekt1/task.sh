@@ -22,6 +22,7 @@ srun /bin/hostname
 
 ## Zaladowanie modulu IntelMPI w wersji domyslnej
 module add plgrid/tools/impi
+module load plgrid/libs/openblas/0.2.6
 
 ## przejscie do katalogu z ktorego wywolany zostal sbatch
 cd $SLURM_SUBMIT_DIR
