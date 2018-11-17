@@ -58,4 +58,4 @@ end
 end
 
 
-calc_julia_main(2000,2000)
+calc_julia_main(200,200)

@@ -1,6 +1,6 @@
 using Distributed
 using SharedArrays
-
+#using Plots
 # punkt o współrzędnych (x,y) należy do zbioru Julii o parametrze  c 
 # jeśli dla liczby zespolonej z=x+i*y
 # ciąg zₙ₊₁=zₙ²+c , nie dąży do nieskończoności
@@ -22,9 +22,9 @@ end
 
 # obliczamy zbiór Julii na płaszczyźnie punktów od-do.
 
- function calc_julia!(julia_set, xrange, yrange; maxiter=2000, height=400, width_start=1, width_end=400)
-  @distributed
-  for x=width_start:width_end
+@everywhere function calc_julia!(julia_set, xrange, yrange; maxiter=2000, height=400, width_start=1, width_end=400)
+  
+  @sync @distributed for x=width_start:width_end
         for y=1:height
             z = xrange[x] + 1im*yrange[y]
             julia_set[x, y] = generate_julia(z, c=-0.70176-0.3842im, maxiter=maxiter)
@@ -32,11 +32,6 @@ end
   end
 
  end
-
-@everywhere calc_julia_point(julia_set, xrange, yrange; x, y, maxiter)
-    z = xrange[x] + 1im*yrange[y]
-    julia_set[x, y] = generate_julia(z, c=-0.70176-0.3842im, maxiter=maxiter)
-end
 
 # główna funkcja 
 
@@ -53,7 +48,11 @@ end
   
    # obliczamy
    @time calc_julia!(julia_set, xrange, yrange, height=h,width_start=1, width_end=w)
-
+    
+    # rysujemy
+  # pl=Plots.heatmap(xrange, yrange, julia_set)
+   
+   #return pl
 end
 
 
