@@ -1,7 +1,7 @@
 using Distributed
 using SharedArrays
 
-# punkt o współrzędnych (x,y) należy do zbioru Julii o parametrze  c 
+# punkt o współrzędnych (x,y) należy do zbioru Julii o parametrze  c
 # jeśli dla liczby zespolonej z=x+i*y
 # ciąg zₙ₊₁=zₙ²+c , nie dąży do nieskończoności
 
@@ -20,37 +20,38 @@ using SharedArrays
     maxiter
 end
 
+# obliczamy jeden wiersz
+@everywhere function generate_julia_row()
+end
+
 # obliczamy zbiór Julii na płaszczyźnie punktów od-do.
 
- function calc_julia!(julia_set, xrange, yrange; maxiter=2000, height=400, width_start=1, width_end=400)
-  @distributed
+@everywhere function calc_julia!(julia_set, xrange, yrange; maxiter=2000, height=400, width_start=1, width_end=400)
+
   for x=width_start:width_end
-        for y=1:height
-            z = xrange[x] + 1im*yrange[y]
-            julia_set[x, y] = generate_julia(z, c=-0.70176-0.3842im, maxiter=maxiter)
-        end
+        zets = [xrange[x] + 1im*yrange[y] for y in 1:height]
+        julia_set[x,:] = pmap(z->generate_julia(z, c=-0.70176-0.3842im, maxiter=maxiter),zets)
+#         for y=1:height
+#             z = xrange[x] + 1im*yrange[y]
+#             julia_set[x, y] = generate_julia(z, c=-0.70176-0.3842im, maxiter=maxiter)
+#         end
   end
 
  end
 
-@everywhere calc_julia_point(julia_set, xrange, yrange; x, y, maxiter)
-    z = xrange[x] + 1im*yrange[y]
-    julia_set[x, y] = generate_julia(z, c=-0.70176-0.3842im, maxiter=maxiter)
-end
-
-# główna funkcja 
+# główna funkcja
 
  function calc_julia_main(h,w)
   # ustawiamy płaszczyznę
    xmin, xmax = -0.5,0.5
    ymin, ymax = -0.5,0.5
-   xrange = xmin:(xmax-xmin)/(w-1):xmax  
+   xrange = xmin:(xmax-xmin)/(w-1):xmax
    yrange = ymin:(ymax-ymin)/(h-1):ymax
-    
+
    julia_set = SharedArray{Int64,2}(w, h)
    # wywołujemy w celu kompilacji na jednym wierszu:
     calc_julia!(julia_set, xrange, yrange, height=h,width_start=1, width_end=1)
-  
+
    # obliczamy
    @time calc_julia!(julia_set, xrange, yrange, height=h,width_start=1, width_end=w)
 
@@ -58,4 +59,3 @@ end
 
 
 calc_julia_main(2000,2000)
-
