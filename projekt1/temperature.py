@@ -1,4 +1,4 @@
-#!/home/oswin/anaconda3/bin/python
+#!/usr/bin/env python
 import numpy as np
 from mpi4py import MPI
 import argparse

@@ -8,7 +8,7 @@
 ## Ilość pamięci przypadającej na jeden rdzeń obliczeniowy (domyślnie 4GB na rdzeń)
 #SBATCH --mem-per-cpu=4GB
 ## Maksymalny czas trwania zlecenia (format HH:MM:SS)
-#SBATCH --time=02:00:00
+#SBATCH --time=01:00:00
 ## Nazwa grantu do rozliczenia zużycia zasobów
 #SBATCH -A plguchwat1112018a
 ## Specyfikacja partycji
@@ -33,7 +33,7 @@ max_process=12
 
 echo "proc,N,time" > run_output.csv
 
-for N in 50 100 200 300 400 500 1000
+for N in 100 200 300 400 500 1000
 do
     echo "proc,N,total_time" >> time_$N.csv
     for proc in {1..12}
@@ -42,7 +42,7 @@ do
         for rep in {1..repeats}
         do
             res=$(mpiexec -np 2 ./temperature.py $N)
-            echo $res
+            echo $N $proc $res
             total_time=$(bc <<< "scale=5;$total_time+$res")
         done
         total_time=$(bc <<< "scale=5;$total_time/10")
