@@ -2,6 +2,7 @@
 import numpy as np
 from mpi4py import MPI
 import argparse
+import pandas as pd
 
 
 def get_stars_number_per_rank(rank, N, world_size):
@@ -30,6 +31,14 @@ def calculate_acceleration_to_star(this_x, this_y, this_z, M, x, y, z):
     return ax, ay, az
 
 
+def read_stars(start_index, stop_index):
+    stars = pd.read_csv("stars")[start_index:stop_index]
+    masses = np.array(stars["mass"])
+    x_cords = np.array(stars["x_cords"])
+    y_cords = np.array(stars["y_cords"])
+    z_cords = np.array(stars["z_cords"])
+    return masses, x_cords, y_cords, z_cords
+
 comm = MPI.COMM_WORLD
 world_size = comm.Get_size()
 rank = comm.Get_rank()
@@ -49,10 +58,13 @@ to_calc, max_buf_size = get_stars_number_per_rank(rank, N, world_size)
 # wszystkie procesy:
 # losowanie gwiazd
 # x_cords = np.random.rand(to_calc)
-masses = np.repeat(rank, to_calc)
-x_cords = np.repeat(rank, to_calc)
-y_cords = np.repeat(rank, to_calc)
-z_cords = np.repeat(rank, to_calc)
+# masses = np.repeat(rank, to_calc)
+# x_cords = np.repeat(rank, to_calc)
+# y_cords = np.repeat(rank, to_calc)
+# z_cords = np.repeat(rank, to_calc)
+start_index = to_calc*rank if to_calc == max_buf_size else N - (world_size - rank)*to_calc
+stop_index = start_index + to_calc
+masses, x_cords, y_cords, z_cords = read_stars(start_index, stop_index)
 
 # prepare buffer
 x_buff = np.concatenate([x_cords, np.zeros(max_buf_size - to_calc)])
@@ -61,9 +73,9 @@ z_buff = np.concatenate([z_cords, np.zeros(max_buf_size - to_calc)])
 masses_buff = np.concatenate([masses, np.zeros(max_buf_size - to_calc)])
 
 # accumulator
-ax = 0
-ay = 0
-az = 0
+ax = np.zeros(to_calc)
+ay = np.zeros(to_calc)
+az = np.zeros(to_calc)
 
 right_neighbour = (rank + 1) % world_size
 left_neighbour = (world_size + rank - 1) % world_size
@@ -79,9 +91,9 @@ for it in range(world_size):
     # calculate accelerations to every star owned by process
     for i, _ in enumerate(x_cords):
         tmp_ax, tmp_ay, tmp_az = calculate_acceleration_to_star(x_cords[i], y_cords[i], z_cords[i], masses_buff, x_buff, y_buff, z_buff)
-        ax = ax + tmp_ax
-        ay = ay + tmp_ay
-        az = az + tmp_az
+        ax[i] = ax[i] + tmp_ax
+        ay[i] = ay[i] + tmp_ay
+        az[i] = az[i] + tmp_az
 
     masses_buff = np.zeros(max_buf_size)
     x_buff = np.zeros(max_buf_size)
